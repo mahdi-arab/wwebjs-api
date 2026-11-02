@@ -14,20 +14,21 @@ MIT license and original copyright notices are retained. This fork has no premiu
 
 ## Run locally
 
-1. `npm ci --ignore-scripts`
+1. Install Node.js 24.9 or newer, then `npm ci --omit=dev --omit=optional --ignore-scripts` for production. For development/tests use `npm ci --ignore-scripts` instead.
 2. Copy `.env.example` to `.env` and generate a unique `API_KEY` (for example with `openssl rand -hex 32`).
 3. Set `CHROME_BIN` to an existing Chrome/Chromium executable. On macOS: `/Applications/Google Chrome.app/Contents/MacOS/Google Chrome`.
 4. Set `ENABLE_WEBHOOK=FALSE` if no webhook is needed. Otherwise set your own `BASE_WEBHOOK_URL` and a separate `WEBHOOK_API_KEY`.
 5. Enable `ENABLE_WEB_UI=TRUE` if desired; then `npm start` and open `/dashboard/`. Enter the inbound API key there. The dashboard stores it in browser localStorage: use a trusted browser profile.
 
-For Docker, use `docker compose up --build -d`. This builds our source rather than pulling the upstream latest image. Keep the API behind localhost or a restricted HTTPS reverse proxy; this is a single shared administrator credential, not tenant isolation.
+For Docker (amd64/arm64), use `docker compose up --build -d`. This builds our source rather than pulling the upstream latest image. Keep the API behind localhost or a restricted HTTPS reverse proxy; this is a single shared administrator credential, not tenant isolation.
 
 ## Validation and remaining blockers
 
 - `npm run test:offline`: 8 tests passed, including unauthorized WebSocket rejection, authorized event delivery, separate webhook credentials, and dashboard behavior.
 - Four selected upstream API health/authentication/callback tests passed.
-- `npm audit --omit=dev`: 26 affected package entries reduced to 17 (0 critical, 11 high, 6 moderate). See `security/npm-audit-production.json`. This count includes transitive/optional packages and propagated findings, not 17 independently exploitable issues. Remaining advisories in browser/archive dependency chains need compatibility work; do not bypass them with untested major overrides or downgrade WhatsApp Web.js solely because npm suggests it.
+- `npm audit --omit=dev --omit=optional`: zero reported vulnerabilities in the production install. Puppeteer is overridden to 25.16.0 to replace its vulnerable browser dependency chain; Node 24.9+ and Jest VM modules are required. Optional archive packages are intentionally excluded: the service uses LocalAuth, not RemoteAuth. RemoteAuth is not supported by this installation profile. This does not assert that the full development/optional dependency tree is vulnerability-free.
+- CI installs the same production profile as Docker, loads the application and checks health/authentication without optional packages, and then runs the audit without suppressing failures. The full development install still runs the 8 offline tests before the production install.
 - A real isolated Chrome session successfully reached WhatsApp Web and emitted a QR after the VPN was enabled. The earlier attempt without VPN failed with `net::ERR_CONNECTION_CLOSED`. The test intentionally destroyed its temporary browser/session immediately after QR emission (a resulting TargetCloseError is teardown noise). Authentication, message delivery, reconnect, and session persistence still require scanning a live QR and remain unverified.
 - Docker daemon is unavailable on the current machine, so the image was not built here.
 
-This is a review candidate, not a production-approved migration. Keep existing sessions untouched until the remaining security findings and real WhatsApp tests are resolved. There is no guarantee of account safety or continued compatibility with the unofficial WhatsApp Web interface.
+This is a review candidate, not a production-approved migration. Keep existing sessions untouched until authenticated WhatsApp message/reconnect/persistence tests are complete. There is no guarantee of account safety or continued compatibility with the unofficial WhatsApp Web interface.

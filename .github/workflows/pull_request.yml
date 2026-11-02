@@ -13,4 +13,9 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - run: npm run test:offline
-      - run: npm audit --omit=dev
+      - name: Install the production dependency tree
+        run: npm ci --omit=dev --omit=optional --ignore-scripts
+      - name: Check runtime without optional dependencies
+        run: node scripts/check-production.cjs
+      - name: Audit the production dependency tree
+        run: npm audit --omit=dev --omit=optional
