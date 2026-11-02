@@ -179,3 +179,34 @@ test('disconnect revokes access before remote logout completes and tolerates net
   expect(mockSessions.has(created.record.id)).toBe(false)
   expect(store.records.has(created.record.id)).toBe(false)
 })
+test('production portal requires HTTPS and issues host-only secure cookies', async () => {
+  const previousEnvironment = process.env.NODE_ENV
+  const previousProxy = process.env.TRUST_PROXY
+  process.env.NODE_ENV = 'production'
+  process.env.TRUST_PROXY = 'TRUE'
+  let productionApp
+  let productionStore
+  try {
+    jest.isolateModules(() => {
+      productionApp = require('../src/app')
+      productionStore = require('../src/portalStore')
+    })
+    expect((await request(productionApp).get('/')).status).toBe(426)
+    const page = await request(productionApp).get('/').set('X-Forwarded-Proto', 'https')
+    expect(page.status).toBe(200)
+    expect(page.headers['strict-transport-security']).toContain('max-age=')
+    const issued = productionStore.issueInvite('12025550123')
+    const response = await request(productionApp).post('/portal/connect').set('X-Forwarded-Proto', 'https').set('Origin', 'https://wa.example.test').send({ phone: issued.phone, invitation: issued.code })
+    expect(response.status).toBe(200)
+    expect(response.headers['set-cookie'][0]).toMatch(/^__Host-wa_portal=/)
+    expect(response.headers['set-cookie'][0]).toContain('Secure')
+    expect(response.headers['set-cookie'][0]).toContain('HttpOnly')
+    expect(response.headers['set-cookie'][0]).not.toContain('Domain=')
+    mockSessions.delete(response.body.sessionId)
+    productionStore.remove(productionStore.records.get(response.body.sessionId))
+  } finally {
+    process.env.NODE_ENV = previousEnvironment
+    if (previousProxy === undefined) delete process.env.TRUST_PROXY
+    else process.env.TRUST_PROXY = previousProxy
+  }
+})
