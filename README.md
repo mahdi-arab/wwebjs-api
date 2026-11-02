@@ -1,3 +1,5 @@
+> Phone connection portal and manual approval: [SESSION_PORTAL.md](SESSION_PORTAL.md).
+
 > Docker release and server setup: [SERVER_DEPLOYMENT.md](SERVER_DEPLOYMENT.md).
 
 > Self-hosted security fork: read [SELF_HOSTING.md](SELF_HOSTING.md) for setup, changes, and unresolved blockers before using upstream instructions below.

@@ -4,7 +4,7 @@ Images: `ghcr.io/mahdi-arab/wwebjs-api`. Supports Linux amd64 and arm64.
 
 ## Build and release
 
-Pull requests and manual workflow runs build and check the image without publishing. The workflow checks offline tests, the production dependency audit, application authentication, and an actual Chromium launch/page evaluation inside Docker. It also builds both supported architectures. No WhatsApp account or QR is needed for these checks.
+Pull requests and manual workflow runs build and check the image without publishing. The workflow checks offline tests, the production dependency audit, application authentication, and an actual Chromium launch/page evaluation inside Docker. Release builds cover both supported architectures; PR/manual checks build and run amd64. No WhatsApp account or QR is needed for these checks.
 
 After merging a version into main, publish a stable version tag:
 
@@ -28,6 +28,8 @@ cp server.env.example .env
 chmod 600 .env
 openssl rand -hex 32
 ```
+
+For the root session portal, also follow [SESSION_PORTAL.md](SESSION_PORTAL.md): set `PORTAL_ORIGIN` to your public HTTPS origin and use `/portal-admin/` to issue invitations after manual approval.
 
 Edit `.env`: set `API_KEY` to the generated key, `ENABLE_WEBHOOK=FALSE` unless you have a receiver, and `ENABLE_WEB_UI=TRUE` if you want the dashboard. For webhooks, configure your own URL and separate `WEBHOOK_API_KEY`. Leave `CHROME_BIN` out of `.env` or set it to `/usr/bin/chromium` (do not copy a macOS path or an empty override into the container). Set `SESSIONS_PATH=/usr/src/app/sessions` so the named volume holds authentication data.
 

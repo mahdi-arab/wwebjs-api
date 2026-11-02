@@ -2,6 +2,8 @@ const { Client, LocalAuth } = require('whatsapp-web.js')
 const fs = require('fs')
 const path = require('path')
 const sessions = new Map()
+const initializingSessions = new Map()
+const portalStore = require('./portalStore')
 const { baseWebhookURL, sessionFolderPath, maxAttachmentSize, setMessagesAsSeen, webVersion, webVersionCacheType, recoverSessions, chromeBin, headless, releaseBrowserLock, proxyUrl, proxyUsername, proxyPassword } = require('./config')
 const { triggerWebhook, waitForNestedObject, isEventEnabled, sendMessageSeenStatus, sleep, patchWWebLibrary } = require('./utils')
 const { logger } = require('./logger')
@@ -126,7 +128,7 @@ const restoreSessions = async () => {
 }
 
 // Setup Session
-const setupSession = async (sessionId, options = {}) => {
+const createSession = async (sessionId, options = {}) => {
   try {
     if (sessions.has(sessionId)) {
       return { success: false, message: `Session already exists for: ${sessionId}`, client: sessions.get(sessionId) }
@@ -213,6 +215,7 @@ const setupSession = async (sessionId, options = {}) => {
     }
 
     const client = new Client(clientOptions)
+    require('./portalClient').configurePortalClient(client, sessionId)
 
     // Webhook URL provided via API (null/empty clears it) takes precedence over the one persisted on disk
     client.webhookUrl = options.webhookUrl !== undefined ? (options.webhookUrl || null) : await loadWebhookConfig(sessionId)
@@ -227,6 +230,7 @@ const setupSession = async (sessionId, options = {}) => {
       }
     }
 
+    sessions.set(sessionId, client)
     try {
       client.once('ready', () => {
         patchWWebLibrary(client).catch((err) => {
@@ -243,16 +247,23 @@ const setupSession = async (sessionId, options = {}) => {
         })
       }
     } catch (error) {
+      sessions.delete(sessionId)
+      await client.destroy().catch(() => {})
       logger.error({ sessionId, err: error }, 'Initialize error')
       throw error
     }
 
-    // Save the session to the Map
-    sessions.set(sessionId, client)
     return { success: true, message: 'Session initiated successfully', client }
   } catch (error) {
     return { success: false, message: error.message, client: null }
   }
+}
+
+const setupSession = (sessionId, options = {}) => {
+  if (initializingSessions.has(sessionId)) return initializingSessions.get(sessionId)
+  const task = createSession(sessionId, options).finally(() => initializingSessions.delete(sessionId))
+  initializingSessions.set(sessionId, task)
+  return task
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -283,6 +294,7 @@ const getSessionWebhook = (sessionId) => {
 
 // Priority: runtime webhookUrl > session env var > global env var
 const resolveWebhookUrl = (client, sessionId) => {
+  if (client._portalOwned || portalStore.records.has(sessionId)) return { webhookUrl: null, source: 'none' }
   const envWebhook = process.env[sessionId.toUpperCase() + '_WEBHOOK_URL']
   if (client.webhookUrl) return { webhookUrl: client.webhookUrl, source: 'runtime' }
   if (envWebhook) return { webhookUrl: envWebhook, source: 'env_session' }
@@ -297,7 +309,7 @@ const resolveWebhookUrl = (client, sessionId) => {
 const initializeEvents = (client, sessionId) => {
   const getWebhookUrl = () => resolveWebhookUrl(client, sessionId).webhookUrl
 
-  if (recoverSessions) {
+  if (recoverSessions && !portalStore.records.has(sessionId)) {
     waitForNestedObject(client, 'pupPage').then(() => {
       const restartSession = async (sessionId) => {
         sessions.delete(sessionId)
