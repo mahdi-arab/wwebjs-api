@@ -1,0 +1,22 @@
+name: wwebjs-api
+services:
+  api:
+    image: ghcr.io/mahdi-arab/wwebjs-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      CHROME_BIN: /usr/bin/chromium
+      SESSIONS_PATH: /usr/src/app/sessions
+    ports:
+      - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
+    volumes:
+      - wwebjs_sessions:/usr/src/app/sessions
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||3000)+(process.env.BASE_PATH||'').replace(/[/]$/,'')+'/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+volumes:
+  wwebjs_sessions:

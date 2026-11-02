@@ -3,7 +3,8 @@ node_modules
 
 # Ignore dotenv files
 .env
-.env.example
+.env.*
+!.env.example
 
 # Ignore logs
 logs
