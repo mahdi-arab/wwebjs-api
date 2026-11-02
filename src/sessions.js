@@ -130,6 +130,7 @@ const restoreSessions = async () => {
 // Setup Session
 const createSession = async (sessionId, options = {}) => {
   try {
+    if (portalStore.records.get(sessionId)?.revoked) return { success: false, message: 'Session access revoked', client: null }
     if (sessions.has(sessionId)) {
       return { success: false, message: `Session already exists for: ${sessionId}`, client: sessions.get(sessionId) }
     }

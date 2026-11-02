@@ -38,7 +38,7 @@ const remove = record => {
 const byPhone = phone => [...records.values()].find(record => record.phone === phone)
 const authorize = (id, token) => {
   const record = records.get(id)
-  return record && typeof token === 'string' && /^[a-f0-9]{64}$/.test(token) && same(record.keyHash, digest(token)) ? record : null
+  return record && !record.revoked && typeof token === 'string' && /^[a-f0-9]{64}$/.test(token) && same(record.keyHash, digest(token)) ? record : null
 }
 const create = phone => {
   const key = crypto.randomBytes(32).toString('hex')

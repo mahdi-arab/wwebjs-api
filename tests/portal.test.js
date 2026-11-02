@@ -162,3 +162,20 @@ test('failed admission attempts are rate limited without starting browsers', asy
   expect(last.status).toBe(429)
   expect(setupSession).toHaveBeenCalledTimes(1)
 })
+test('disconnect revokes access before remote logout completes and tolerates network failure', async () => {
+  const created = store.create('12025550123')
+  let rejectLogout
+  let markStarted
+  const started = new Promise(resolve => { markStarted = resolve })
+  const client = { _portalReady: true, logout: jest.fn(() => new Promise((resolve, reject) => { rejectLogout = reject; markStarted() })), destroy: jest.fn().mockResolvedValue() }
+  mockSessions.set(created.record.id, client)
+  const closing = post('/portal/disconnect', {}).set('Cookie', `wa_portal=${created.record.id}.${created.key}`).set('x-portal-csrf', store.digest(created.key + ':csrf')).then(response => response)
+  await started
+  expect(store.authorize(created.record.id, created.key)).toBeFalsy()
+  rejectLogout(new Error('Network unavailable'))
+  const response = await closing
+  expect(response.status).toBe(200)
+  expect(response.body.logoutConfirmed).toBe(false)
+  expect(mockSessions.has(created.record.id)).toBe(false)
+  expect(store.records.has(created.record.id)).toBe(false)
+})

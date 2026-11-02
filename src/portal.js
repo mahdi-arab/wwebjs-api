@@ -49,15 +49,32 @@ const auth = (req, res, next) => {
   next()
 }
 const csrf = (req, res, next) => store.same(req.get('x-portal-csrf'), store.digest(req.portalToken + ':csrf')) ? next() : fail(res, 403, 'request_rejected')
+const bounded = async (action, milliseconds = 10000) => {
+  let timer
+  try {
+    return await Promise.race([
+      Promise.resolve().then(action),
+      new Promise((resolve, reject) => { timer = setTimeout(() => reject(new Error('Session operation timed out')), milliseconds) })
+    ])
+  } finally { clearTimeout(timer) }
+}
 const close = async record => {
   const client = sessions.get(record.id)
+  const wasReady = !!client?._portalReady
+  record.revoked = true
+  store.save(record)
+  let logoutConfirmed = null
   if (client) {
-    if (client._portalReady) await client.logout()
-    await client.destroy().catch(() => {})
+    client._portalReady = false
+    if (wasReady) {
+      try { await bounded(() => client.logout()); logoutConfirmed = true } catch { logoutConfirmed = false }
+    }
+    await bounded(() => client.destroy()).catch(() => { client.pupBrowser?.process?.()?.kill('SIGKILL') })
     sessions.delete(record.id)
   }
-  await fs.rm(path.join(sessionFolderPath, 'session-' + record.id), { recursive: true, force: true })
+  await fs.rm(path.join(sessionFolderPath, 'session-' + record.id), { recursive: true, force: true, maxRetries: 3, retryDelay: 200 })
   store.remove(record)
+  return { logoutConfirmed }
 }
 const start = record => {
   if (sessions.has(record.id) || pending.has(record.id)) return
@@ -118,11 +135,11 @@ router.post('/portal/disconnect', writes, auth, csrf, wrapper(async (req, res) =
   if (pending.has(req.portal.id) || busy.has(req.portal.id)) return fail(res, 409, 'connection_in_progress')
   busy.add(req.portal.id)
   try {
-    await close(req.portal)
+    const result = await close(req.portal)
     const clearOptions = { ...cookieOptions }
     delete clearOptions.maxAge
     res.clearCookie(cookieName, clearOptions)
-    res.json({ success: true })
+    res.json({ success: true, ...result })
   } finally { busy.delete(req.portal.id) }
 }))
 const adminLimit = rateLimit({ windowMs: 60000, limit: 10, standardHeaders: 'draft-7', legacyHeaders: false })
@@ -151,7 +168,7 @@ router.use((error, req, res, next) => {
 })
 const cleanup = setInterval(() => {
   for (const record of store.records.values()) {
-    if (!record.verified && Date.now() - record.createdAt > ttl && !busy.has(record.id)) {
+    if ((record.revoked || (!record.verified && Date.now() - record.createdAt > ttl)) && !busy.has(record.id)) {
       pending.delete(record.id)
       busy.add(record.id)
       close(record).catch(() => {}).finally(() => busy.delete(record.id))

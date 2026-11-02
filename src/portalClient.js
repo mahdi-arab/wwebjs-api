@@ -7,7 +7,7 @@ const configurePortalClient = (client, id) => {
   client.on('qr', () => { client._portalReady = false })
   client.on('disconnected', () => { client._portalReady = false; account.error ||= 'offline' })
   client.on('ready', () => {
-    if (store.records.get(id) !== account) {
+    if (account.revoked || store.records.get(id) !== account) {
       client.destroy().catch(() => {})
       return
     }

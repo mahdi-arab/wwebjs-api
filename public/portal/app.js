@@ -92,14 +92,14 @@ $('disconnect').addEventListener('click', async () => {
   $('disconnect').disabled = true
   clearTimeout(timer)
   try {
-    await request('disconnect', {})
+    const result = await request('disconnect', {})
     destroyed = true
     if (qrUrl) URL.revokeObjectURL(qrUrl)
     $('secret').value = ''
     $('secret-box').hidden = true
     $('session').hidden = true
     $('connect-form').hidden = false
-    $('error').textContent = 'سشن بسته شد. برای اتصال جدید از مدیر دعوت‌نامه بگیرید.'
+    $('error').textContent = result.logoutConfirmed === false ? 'دسترسی سشن بسته و کلید باطل شد، اما خروج از واتساپ تأیید نشد. این دستگاه را در بخش دستگاه‌های متصل گوشی هم حذف کنید.' : 'سشن بسته شد. برای اتصال جدید از مدیر دعوت‌نامه بگیرید.'
   } catch (error) { $('error').textContent = error.message; await poll() } finally { $('disconnect').disabled = false; destroyed = false }
 })
 window.addEventListener('pagehide', () => { destroyed = true; clearTimeout(timer); if (qrUrl) URL.revokeObjectURL(qrUrl) })
