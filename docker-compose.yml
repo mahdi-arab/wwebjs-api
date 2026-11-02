@@ -5,11 +5,12 @@ name: wwebjs-api
 
 services:
   api:
-    image: avoylenko/wwebjs-api:latest
+    build: .
+    image: wwebjs-api-local:security
     container_name: wwebjs-api
     restart: always
     ports:
-      - "${PORT:-3000}:${PORT:-3000}"
+      - "127.0.0.1:${PORT:-3000}:${PORT:-3000}"
     env_file: .env
     volumes:
       # Use a named Docker volume so WhatsApp sessions persist across

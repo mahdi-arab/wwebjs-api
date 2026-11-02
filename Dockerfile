@@ -8,24 +8,15 @@ FROM node-${TARGETARCH} AS base
 ENV CHROME_BIN="/usr/bin/chromium" \
     PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium" \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD="true" \
+    SCARF_ANALYTICS="false" \
     NODE_ENV="production"
 
 WORKDIR /usr/src/app
 
 FROM base AS deps
 
-ARG USE_EDGE=false
-
-COPY package*.json ./
-
-RUN if [ "$USE_EDGE" = "true" ]; then \
-      apt-get update && apt-get install -y --no-install-recommends git ca-certificates && \
-      npm ci --only=production --ignore-scripts && \
-      npm install --save-exact git+https://github.com/pedroslopez/whatsapp-web.js.git#main && \
-      apt-get purge -y git ca-certificates && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*; \
-    else \
-      npm ci --only=production --ignore-scripts; \
-    fi
+COPY package*.json .npmrc ./
+RUN npm ci --omit=dev --ignore-scripts
 
 # Create the final stage
 FROM base
