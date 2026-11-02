@@ -1,5 +1,6 @@
 const { WebSocketServer } = require('ws')
-const { enableWebSocket, basePath } = require('./config')
+const { timingSafeEqual } = require('crypto')
+const { enableWebSocket, basePath, globalApiKey } = require('./config')
 const { logger } = require('./logger')
 const wssMap = new Map()
 
@@ -52,12 +53,18 @@ const triggerWebSocket = (sessionId, dataType, data) => {
 }
 
 const handleUpgrade = (request, socket, head) => {
-  const host = request.headers['x-forwarded-host'] || request.headers.host
-  const baseUrl = 'ws://' + host + '/'
-  const { pathname } = new URL(request.url, baseUrl)
+  const supplied = request.headers['x-api-key']
+  const expected = Buffer.from(globalApiKey || '')
+  const actual = Buffer.from(typeof supplied === 'string' ? supplied : '')
+  if (!expected.length || actual.length !== expected.length || !timingSafeEqual(actual, expected)) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n')
+    socket.destroy()
+    return
+  }
+  const { pathname } = new URL(request.url, 'http://localhost')
 
   // Handle base path for WebSocket connections
-  const wsPath = basePath ? `${basePath}/ws/` : '/ws/'
+  const wsPath = `${basePath.replace(/\/$/, '')}/ws/`
   if (pathname.startsWith(wsPath)) {
     const pathParts = pathname.split('/')
     const sessionId = pathParts[pathParts.length - 1]

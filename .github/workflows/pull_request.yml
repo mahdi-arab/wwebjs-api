@@ -1,25 +1,21 @@
-name: CI/CD Pipeline for Pull Requests to Main
-
-on:
-  pull_request:
-    branches:
-      - main
+name: Security checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        node-version:
-          - 24.x
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-      - name: 'Use Node.js ${{ matrix.node-version }}'
-        uses: actions/setup-node@v7
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '${{ matrix.node-version }}'
-      - name: Install dependencies
-        run: npm ci
-      - name: Run tests
-        run: npm test
-        timeout-minutes: 5
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:offline
+      - name: Install the production dependency tree
+        run: npm ci --omit=dev --omit=optional --ignore-scripts
+      - name: Check runtime without optional dependencies
+        run: node scripts/check-production.cjs
+      - name: Audit the production dependency tree
+        run: npm audit --omit=dev --omit=optional

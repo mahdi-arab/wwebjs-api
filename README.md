@@ -1,3 +1,5 @@
+> Self-hosted security fork: read [SELF_HOSTING.md](SELF_HOSTING.md) for setup, changes, and unresolved blockers before using upstream instructions below.
+
 # WWebJS REST API
 
 REST API wrapper for the [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js) library, providing an easy-to-use interface to interact with the WhatsApp Web platform. 

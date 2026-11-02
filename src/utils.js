@@ -1,5 +1,5 @@
 const axios = require('axios')
-const { globalApiKey, disabledCallbacks, enableWebHook } = require('./config')
+const { webhookApiKey, disabledCallbacks, enableWebHook } = require('./config')
 const { logger } = require('./logger')
 const ChatFactory = require('whatsapp-web.js/src/factories/ChatFactory')
 const Client = require('whatsapp-web.js').Client
@@ -8,7 +8,7 @@ const { Chat, Message } = require('whatsapp-web.js/src/structures')
 // Trigger webhook endpoint
 const triggerWebhook = (webhookURL, sessionId, dataType, data) => {
   if (enableWebHook) {
-    axios.post(webhookURL, { dataType, data, sessionId }, { headers: { 'x-api-key': globalApiKey } })
+    axios.post(webhookURL, { dataType, data, sessionId }, { headers: webhookApiKey ? { 'x-api-key': webhookApiKey } : {}, timeout: 10000 })
       .then(() => logger.debug({ sessionId, dataType, data: data || '' }, `Webhook message sent to ${webhookURL}`))
       .catch(error => logger.error({ sessionId, dataType, err: error, data: data || '' }, `Failed to send webhook message to ${webhookURL}`))
   }

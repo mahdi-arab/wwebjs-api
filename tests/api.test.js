@@ -3,6 +3,7 @@ const fs = require('fs')
 
 // Mock your application's environment variables
 process.env.API_KEY = 'test_api_key'
+process.env.WEBHOOK_API_KEY = 'test_api_key'
 process.env.SESSIONS_PATH = './sessions_test'
 process.env.ENABLE_LOCAL_CALLBACK_EXAMPLE = 'TRUE'
 process.env.BASE_WEBHOOK_URL = 'http://localhost:3000/localCallbackExample'

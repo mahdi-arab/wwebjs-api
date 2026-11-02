@@ -1,31 +1,21 @@
 # Use the official Node.js Debian image as the base image.
-# node:24 has no linux/arm/v7 build, so 32-bit ARM stays on node:22.
+# Supported platforms: linux/amd64 and linux/arm64 (Node 24).
 FROM node:24-bookworm-slim AS node-amd64
 FROM node:24-bookworm-slim AS node-arm64
-FROM node:22-bookworm-slim AS node-arm
 FROM node-${TARGETARCH} AS base
 
 ENV CHROME_BIN="/usr/bin/chromium" \
     PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium" \
     PUPPETEER_SKIP_CHROMIUM_DOWNLOAD="true" \
+    SCARF_ANALYTICS="false" \
     NODE_ENV="production"
 
 WORKDIR /usr/src/app
 
 FROM base AS deps
 
-ARG USE_EDGE=false
-
-COPY package*.json ./
-
-RUN if [ "$USE_EDGE" = "true" ]; then \
-      apt-get update && apt-get install -y --no-install-recommends git ca-certificates && \
-      npm ci --only=production --ignore-scripts && \
-      npm install --save-exact git+https://github.com/pedroslopez/whatsapp-web.js.git#main && \
-      apt-get purge -y git ca-certificates && apt-get autoremove -y && rm -rf /var/lib/apt/lists/*; \
-    else \
-      npm ci --only=production --ignore-scripts; \
-    fi
+COPY package*.json .npmrc ./
+RUN npm ci --omit=dev --omit=optional --ignore-scripts
 
 # Create the final stage
 FROM base
