@@ -21,10 +21,10 @@ Publishing uses the repository's automatic `GITHUB_TOKEN`, with package write pe
 
 ## Server setup
 
-Install Docker Engine and the Compose plugin. Download `compose.server.yml` and `.env.example` from a completed GitHub Release into a dedicated directory (or use this repository's main branch).
+Install Docker Engine and the Compose plugin. Download `compose.server.yml` and `server.env.example` from a completed GitHub Release into a dedicated directory (when using the repository instead, copy its `.env.example` to `.env`).
 
 ```sh
-cp .env.example .env
+cp server.env.example .env
 chmod 600 .env
 openssl rand -hex 32
 ```

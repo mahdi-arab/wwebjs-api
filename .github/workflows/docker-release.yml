@@ -100,10 +100,11 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
           IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
         run: |
+          cp .env.example server.env.example
           sed -i "s/:\${IMAGE_TAG:-latest}/:\${IMAGE_TAG:-${RELEASE_TAG}}/" compose.server.yml
           printf 'Image: `ghcr.io/mahdi-arab/wwebjs-api:%s`\n\nDigest: `%s`\n\nPlatforms: linux/amd64, linux/arm64.\n\nSee SERVER_DEPLOYMENT.md for setup and rollback.\n' "$RELEASE_TAG" "$IMAGE_DIGEST" > release-notes.md
           if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" compose.server.yml .env.example SERVER_DEPLOYMENT.md --clobber
+            gh release upload "$RELEASE_TAG" compose.server.yml server.env.example SERVER_DEPLOYMENT.md --clobber
           else
-            gh release create "$RELEASE_TAG" compose.server.yml .env.example SERVER_DEPLOYMENT.md --title "$RELEASE_TAG" --notes-file release-notes.md --verify-tag
+            gh release create "$RELEASE_TAG" compose.server.yml server.env.example SERVER_DEPLOYMENT.md --title "$RELEASE_TAG" --notes-file release-notes.md --verify-tag
           fi
