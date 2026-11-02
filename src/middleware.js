@@ -1,7 +1,21 @@
 const { globalApiKey, rateLimitMax, rateLimitWindowMs } = require('./config')
 const { sendErrorResponse } = require('./utils')
-const { validateSession } = require('./sessions')
+const { validateSession, sessions } = require('./sessions')
 const rateLimiting = require('express-rate-limit')
+
+const portalStore = require('./portalStore')
+const userApiLimiter = rateLimiting({ windowMs: 60000, limit: 60, keyGenerator: req => portalStore.digest(req.headers['x-api-key']), standardHeaders: 'draft-7', legacyHeaders: false })
+const portalApiAccess = req => {
+  const parts = req.path.split('/').filter(Boolean)
+  if (parts.length !== 2 || !req.baseUrl.endsWith('/client')) return false
+  const [method, id] = parts
+  const account = portalStore.authorize(id, req.headers['x-api-key'])
+  if (!account || !sessions.get(id)?._portalReady) return false
+  if (req.method === 'GET' && ['getState', 'getChats', 'getContacts', 'getClassInfo'].includes(method)) return true
+  const allowed = req.method === 'POST' && method === 'sendMessage' && req.body?.contentType === 'string' && typeof req.body.content === 'string' && req.body.content.length <= 10000 && typeof req.body.chatId === 'string' && /^[0-9-]+@(c.us|g.us)$/.test(req.body.chatId)
+  if (allowed) req.body.options = {}
+  return allowed
+}
 
 const apikey = async (req, res, next) => {
   /*
@@ -18,13 +32,9 @@ const apikey = async (req, res, next) => {
         }
       }
   */
-  if (globalApiKey) {
-    const apiKey = req.headers['x-api-key']
-    if (!apiKey || apiKey !== globalApiKey) {
-      return sendErrorResponse(res, 403, 'Invalid API key')
-    }
-  }
-  next()
+  if (globalApiKey && portalStore.same(req.headers['x-api-key'], globalApiKey)) return next()
+  if (portalApiAccess(req)) return next()
+  return sendErrorResponse(res, 403, 'Invalid API key')
 }
 
 const sessionNameValidation = async (req, res, next) => {
@@ -233,7 +243,18 @@ const channelSwagger = async (req, res, next) => {
   next()
 }
 
+// Reject unauthenticated API requests before buffering their request bodies.
+const smallJson = require('express').json({ limit: '16kb' })
+const authenticateBeforeBody = (req, res, next) => {
+  if (!/^\/(session|client|chat|contact|message|groupChat|channel|localCallbackExample)(\/|$)/.test(req.path)) return next()
+  if (globalApiKey && portalStore.same(req.headers['x-api-key'], globalApiKey)) return next()
+  const id = req.path.split('/').filter(Boolean).at(-1)
+  if (!portalStore.authorize(id, req.headers['x-api-key']) || !sessions.get(id)?._portalReady) return sendErrorResponse(res, 403, 'Invalid API key')
+  return userApiLimiter(req, res, () => smallJson(req, res, next))
+}
+
 module.exports = {
+  authenticateBeforeBody,
   sessionValidation,
   apikey,
   sessionNameValidation,

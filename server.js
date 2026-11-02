@@ -23,6 +23,10 @@ const server = app.listen(servicePort, () => {
   }
 })
 
+server.headersTimeout = 15000
+server.requestTimeout = 30000
+server.maxHeadersCount = 50
+
 if (enableWebSocket) {
   server.on('upgrade', (request, socket, head) => {
     handleUpgrade(request, socket, head)

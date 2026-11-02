@@ -14,6 +14,10 @@ if (trustProxy) {
   app.set('trust proxy', true)
 }
 
+// Portal parsing, origin checks and small body limits run before the API parser/CORS.
+app.use(basePath, require('./portal').router)
+app.use(basePath, require('./middleware').authenticateBeforeBody)
+
 app.use(express.json({ limit: maxAttachmentSize + 1000000 }))
 app.use(express.urlencoded({ limit: maxAttachmentSize + 1000000, extended: true }))
 
@@ -24,5 +28,10 @@ app.use(cors({
 
 // Mount routes with configurable base path
 app.use(basePath, routes)
+
+app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error)
+  res.status(error.type === 'entity.too.large' ? 413 : error instanceof SyntaxError ? 400 : 500).json({ success: false, error: 'Request failed' })
+})
 
 module.exports = app
