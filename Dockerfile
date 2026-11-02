@@ -1,8 +1,6 @@
 # Use the official Node.js Debian image as the base image.
 # Supported platforms: linux/amd64 and linux/arm64 (Node 24).
-FROM node:24-bookworm-slim AS node-amd64
-FROM node:24-bookworm-slim AS node-arm64
-FROM node-${TARGETARCH} AS base
+FROM node:24-bookworm-slim AS base
 
 ENV CHROME_BIN="/usr/bin/chromium" \
     PUPPETEER_EXECUTABLE_PATH="/usr/bin/chromium" \
@@ -39,6 +37,7 @@ COPY LICENSE ./
 COPY swagger.json ./
 COPY src/ ./src/
 COPY public/ ./public/
+COPY scripts/ ./scripts/
 
 EXPOSE 3000
 

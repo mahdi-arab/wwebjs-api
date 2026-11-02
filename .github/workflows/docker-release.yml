@@ -1,0 +1,109 @@
+name: Docker build and release
+on:
+  pull_request:
+    branches: [main]
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate release tag and source
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Use a stable vMAJOR.MINOR.PATCH tag'; exit 1; }
+          git merge-base --is-ancestor HEAD origin/main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run test:offline
+      - run: npm ci --omit=dev --omit=optional --ignore-scripts
+      - run: node scripts/check-production.cjs
+      - run: npm audit --omit=dev --omit=optional
+  image:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      digest: ${{ steps.publish.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build a local image for runtime checks
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: wwebjs-api:smoke
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Check application and Chromium inside the image
+        run: |
+          docker run --rm --entrypoint node wwebjs-api:smoke scripts/check-production.cjs
+          docker run --rm --entrypoint node wwebjs-api:smoke scripts/check-chromium.cjs
+          cp .env.example .env
+          docker compose -f compose.server.yml --env-file .env.example config --quiet
+      - name: Log in to GHCR
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build both architectures and publish releases
+        id: publish
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ startsWith(github.ref, 'refs/tags/') }}
+          tags: |
+            ghcr.io/mahdi-arab/wwebjs-api:${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.sha }}
+            ghcr.io/mahdi-arab/wwebjs-api:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/mahdi-arab/wwebjs-api
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.licenses=MIT
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create GitHub Release with deployment files
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          IMAGE_DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          sed -i "s/:\${IMAGE_TAG:-latest}/:\${IMAGE_TAG:-${RELEASE_TAG}}/" compose.server.yml
+          printf 'Image: `ghcr.io/mahdi-arab/wwebjs-api:%s`\n\nDigest: `%s`\n\nPlatforms: linux/amd64, linux/arm64.\n\nSee SERVER_DEPLOYMENT.md for setup and rollback.\n' "$RELEASE_TAG" "$IMAGE_DIGEST" > release-notes.md
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" compose.server.yml .env.example SERVER_DEPLOYMENT.md --clobber
+          else
+            gh release create "$RELEASE_TAG" compose.server.yml .env.example SERVER_DEPLOYMENT.md --title "$RELEASE_TAG" --notes-file release-notes.md --verify-tag
+          fi
